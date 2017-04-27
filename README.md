@@ -5,8 +5,6 @@
 
 ## 使用方法
 
-> git clone https://github.com/moeFree/nospeaking.git
-
 > npm install
 
 > node server.js
