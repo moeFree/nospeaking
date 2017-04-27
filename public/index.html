@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>No Speaking</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
+    <link href="stylesheets/style.css" type="text/css" rel='stylesheet'>
+    <script src="javascripts/socket.io.min.js"></script>
+    <script src="javascripts/vue.min.js"></script>
+    <script src="javascripts/jquery.js"></script>
+    <script type="text/javascript" src="http://api.map.baidu.com/api?v=2.0&ak=SNZ74Iq2KAmrKa1qgArwDrRGMe59NOjE"></script>
+</head>
+<body>
+<div id="main">
+     <div class="weather">
+        <img :src="'http://files.heweather.com/cond_icon/'+weather.now.cond.code+'.png'" style="float:right">
+        <h2>今日天气:</h2>
+        <p>天气状况:{{weather.now.cond.txt}}</p>
+        <p>室外温度:{{weather.now.tmp}}℃</p>
+        <p>体感温度:{{weather.now.fl}}℃</p>
+        <p>风力:{{weather.now.wind.sc}}</p>
+        <p>风向:{{weather.now.wind.dir}}</p>
+        <p>能见度:{{weather.now.vis}}km</p>
+        <h2>明日天气:</h2>
+        <p>白天:{{weather.nextDay.cond.txt_d}};风力:{{weather.nextDay.wind.sc}};温度:{{weather.nextDay.tmp.max}}℃;</p>
+        <p>夜间:{{weather.nextDay.cond.txt_n}};温度:{{weather.nextDay.tmp.min}}℃</p>
+        <h2>生活指数:</h2>
+        <div v-for="(value,key) in weather.suggestion">
+            <h3>{{key | suggestionFilter}}:</h3>
+            <p>{{value.brf}}</p>
+            <p>{{value.txt}}</p>
+        </div>
+    </div>
+     <div class="weather-btn" @click="weatherToggle">
+        <span class="weather-btn-text">{{weather.basic.city}}:</span>
+        <img :src="'http://files.heweather.com/cond_icon/'+weather.now.cond.code+'.png'" style="float:right;width:100%;">
+        <span class="weather-btn-text">{{weather.now.tmp}}℃</span>
+        <span class="weather-btn-text">{{weather.aqi.city.qlty}} {{weather.aqi.city.pm25}}</span>
+        <span class="weather-btn-text" v-show="!weather.isOpen" style="padding-left:5px">→</span>
+        <span class="weather-btn-text" v-show="weather.isOpen" style="padding-left:5px">←</span>
+    </div>
+    <div class="main">
+        <div class="phone-control">
+            <span class="phone-weather">{{weather.now.cond.txt}} {{weather.now.tmp}}℃ {{weather.aqi.city.qlty}} {{weather.aqi.city.pm25}}</span>
+            <a @click="logout">O</a>
+            <a id="user">U</a>
+        </div>
+        <ul class="user-list">
+            <li v-for="user in users">
+                <img :src="'images/'+user.headPic" alt="" class="user-headPic">{{user.userName}}
+            </li>
+        </ul>
+        <div class="messages">
+            <ul>
+                <li :class="{ me: message.uid == me.uid }" v-for="message in messages">
+                    <img :src="'images/'+message.headPic" alt="" class="user-headPic">
+                    <span class="user-name">{{message.userName}}</span>
+                    <div class="text" v-html="message.message">
+
+                    </div>
+                </li>
+            </ul>
+        </div>
+        <div class="emotion-btn">
+            <span class="face" @click="toggleFaceList">表情</span>
+        </div>
+        <div class="face-mask" v-show="faceFlag" @click="toggleFaceList"></div>
+        <div class="emotion-preview" v-show="faceFlag">
+          <img :src="emotion">
+        </div>
+        <div class="face-list" v-show="faceFlag">
+            <ul>
+                <li v-for="face in pages.tempData" class="face-item">
+                    <img :src="face.src" alt="" @click="sendFace(face.src)" @mouseover="emotion = face.src" @mouseout="emotion = ''">
+                </li>
+            </ul>
+        </div>
+        <div v-show="faceFlag" class="pageBtn-group">
+            <a class="pre-page" @click="prePage"><i class="arrow-left"></i>
+                上一页</a>
+
+            <a class="next-page" @click="nextPage">下一页<i class="arrow-right"></i></a>
+        </div>
+        <div class="editor-main">
+            <div id="m" class="editor" contenteditable="true"></div>
+            <button @click="sendMessage">发送</button>
+        </div>
+    </div>
+    <div class="mask" :class="{show: !login}">
+        <div class="info">
+            <ul class="headPic-list">
+                <li v-for="headPic in headPics">
+                    <img :src="'images/'+headPic.src"  :class="{selected:me.headPic == headPic.src}"   @click="me.headPic = headPic.src">
+                </li>
+            </ul>
+            <input type="text" v-model="me.userName" @keyup.enter="confirmName" placeholder="输入一个名字">
+            <img src="images/dice.jpeg" class="random-name" @click="randomName">
+            <a class="nb-btn" @click.prevent="confirmName">进入CBD</a>
+        </div>
+
+    </div>
+    <a class="logout" @click="logout">Logout</a>
+</div>
+<div class="loading">
+  <svg viewBox="0 0 120 120" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <g id="circle" class="g-circles g-circles--v3">
+          <circle id="12" transform="translate(35, 16.698730) rotate(-30) translate(-35, -16.698730) " cx="35" cy="16.6987298" r="10"></circle>
+          <circle id="11" transform="translate(16.698730, 35) rotate(-60) translate(-16.698730, -35) " cx="16.6987298" cy="35" r="10"></circle>
+          <circle id="10" transform="translate(10, 60) rotate(-90) translate(-10, -60) " cx="10" cy="60" r="10"></circle>
+          <circle id="9" transform="translate(16.698730, 85) rotate(-120) translate(-16.698730, -85) " cx="16.6987298" cy="85" r="10"></circle>
+          <circle id="8" transform="translate(35, 103.301270) rotate(-150) translate(-35, -103.301270) " cx="35" cy="103.30127" r="10"></circle>
+          <circle id="7" cx="60" cy="110" r="10"></circle>
+          <circle id="6" transform="translate(85, 103.301270) rotate(-30) translate(-85, -103.301270) " cx="85" cy="103.30127" r="10"></circle>
+          <circle id="5" transform="translate(103.301270, 85) rotate(-60) translate(-103.301270, -85) " cx="103.30127" cy="85" r="10"></circle>
+          <circle id="4" transform="translate(110, 60) rotate(-90) translate(-110, -60) " cx="110" cy="60" r="10"></circle>
+          <circle id="3" transform="translate(103.301270, 35) rotate(-120) translate(-103.301270, -35) " cx="103.30127" cy="35" r="10"></circle>
+          <circle id="2" transform="translate(85, 16.698730) rotate(-150) translate(-85, -16.698730) " cx="85" cy="16.6987298" r="10"></circle>
+          <circle id="1" cx="60" cy="10" r="10"></circle>
+      </g>
+  </svg>
+</div>
+</body>
+<script>
+    var socket = io('localhost:10666');
+
+    const headPics=[
+        {'src':'headPic_1.png','isSelected':false},
+        {'src':'headPic_2.jpg','isSelected':false},
+        {'src':'headPic_3.gif','isSelected':false},
+        {'src':'headPic_4.jpg','isSelected':false},
+        {'src':'headPic_5.jpg','isSelected':false},
+        {'src':'headPic_6.jpg','isSelected':false},
+//        {'src':'cat.jpg','isSelected':false}
+    ];
+    const suggestionTitle=[
+        {"code":"air","txt":"空气质量"},
+        {"code":"comf","txt":"舒适度"},
+        {"code":"cw","txt":"洗车指数"},
+        {"code":"drsg","txt":"穿衣指数"},
+        {"code":"flu","txt":"感冒指数"},
+        {"code":"sport","txt":"运动指数"},
+        {"code":"trav","txt":"出行指数"},
+        {"code":"uv","txt":"紫外线指数"}
+    ];
+
+
+    var chat = new Vue({
+        el: '#main',
+        data: {
+            users: [
+
+            ],
+            headPics:headPics,
+            messages: [
+
+            ],
+            me: {
+                userId: '',
+                uid: 'id' + Date.now(),
+                userName: '',
+                message: '',
+                headPic:'headPic_1.png'
+            },
+            facePicList:[],
+            firstNameList:[],
+            secondNameList:[],
+            dotList:[],
+            faceFlag:false,
+            emotion: '',
+            login: false,
+            pages:{
+                size:28,
+                pageCount:"",
+                page:0,
+                tempData:[]
+            },
+            weather:{
+                basic:{
+                    city:""
+                },
+                aqi:{
+                  city:{
+                      qlty:"",
+                      pm25:""
+                  }
+                },
+                now:{
+                    cond:{
+                        code:"101"
+                    },
+                    wind:{}
+                },
+                nextDay:{
+                    cond:{},
+                    wind:{},
+                    tmp:{}
+                },
+                suggestion:{},
+                txt:"打开",
+                isOpen:false
+            }
+        },
+        created: function(){
+            if(localStorage['me']){
+              var me = JSON.parse(localStorage['me']);
+              this.me.uid = me.uid;
+              this.me.userName = me.userName;
+              this.me.headPic = me.headPic;
+              this.login = true;
+              socket.emit('user online', this.me);
+            }else{
+              $('.loading').hide();
+            }
+            this.loadFaceList();
+            this.loadNameList();
+            this.getWeather();
+        },
+        methods: {
+            sendMessage: function () {
+                if($('#m').html()!=""){
+                    chat.me.message = $('#m').html();
+                    socket.emit('chat message', chat.me);
+                    chat.me.message = '';
+                    $('#m').html('');
+                }else{
+                    return false
+                }
+
+            },
+            confirmName: function () {
+                if(!chat.me.userName){
+                  alert('用户名不能为空');
+                  return false;
+                }
+                chat.login = true;
+                localStorage.setItem('me',JSON.stringify({
+                  uid: chat.me.uid,
+                  userName: chat.me.userName,
+                  headPic: chat.me.headPic
+                }));
+                socket.emit('user online', chat.me);
+
+            },
+            logout: function(){
+                localStorage.clear();
+                chat.login = false;
+            },
+            loadFaceList:function () {
+                $.get('json/face-list.json',function (data) {
+                    chat.facePicList=data.data.list;
+                    chat.pages.pageCount=(Math.ceil(chat.facePicList.length/chat.pages.size)-1);
+                    chat.pages.tempData=chat.facePicList.slice(chat.pages.page*chat.pages.size,(chat.pages.page+1)*chat.pages.size)
+                })
+            },
+            toggleFaceList:function () {
+                $(".face-list").scrollTop(0);
+                chat.faceFlag=!chat.faceFlag;
+            },
+            sendFace:function (src) {
+                chat.me.message = '<img src="'+src+'">';
+                socket.emit('chat message', chat.me);
+                chat.me.message = '';
+                $('#m').html('');
+                chat.faceFlag=false;
+                $(".face-list").scrollTop(0);
+                $("#m").focus();
+            },
+            loadNameList:function () {
+                $.get('json/name-list.json',function (data) {
+                    chat.firstNameList=data.data.first;
+                    chat.secondNameList=data.data.second;
+                    chat.dotList=data.data.dot;
+                })
+            },
+            randomName:function () {
+                var length1=chat.firstNameList.length;
+                var length2=chat.secondNameList.length;
+                var length3=chat.dotList.length;
+                var index1=(1+Math.round(Math.random()*(length1-1)));
+                var index2=(1+Math.round(Math.random()*(length2-1)));
+                var index3=(1+Math.round(Math.random()*(length3-1)));
+                chat.me.userName=chat.firstNameList[index1].name+chat.dotList[index3].dot+chat.secondNameList[index2].name;
+            },
+            nextPage:function () {
+                if(this.pages.page>=this.pages.pageCount){
+                    return false
+                }else{
+                    ++this.pages.page;
+                    chat.pages.tempData=chat.facePicList.slice(chat.pages.page*chat.pages.size,(chat.pages.page+1)*chat.pages.size)
+                }
+            },
+            prePage:function () {
+                if(this.pages.page<=0){
+                    return false
+                }else{
+                    --this.pages.page;
+                    chat.pages.tempData=chat.facePicList.slice(chat.pages.page*chat.pages.size,(chat.pages.page+1)*chat.pages.size)
+                }
+            },
+            getWeather:function () {
+                function myFun(result){
+                    var cityName = result.name;
+                    $.get('https://free-api.heweather.com/v5/weather?city='+cityName+'&key=1be28cbffb304bedb29a6ba15ec949c5',function (res) {
+                      if(res && res.HeWeather5 && res.HeWeather5[0]){
+                        chat.weather.now=res.HeWeather5[0].now;
+                        if(res.HeWeather5[0].daily_forecast) chat.weather.nextDay = res.HeWeather5[0].daily_forecast[1];
+                        chat.weather.suggestion=res.HeWeather5[0].suggestion;
+                        chat.weather.aqi=res.HeWeather5[0].aqi;
+                        chat.weather.basic=res.HeWeather5[0].basic;
+                      }
+                    })
+                }
+                var myCity = new BMap.LocalCity();
+                myCity.get(myFun);
+
+            },
+            weatherToggle:function () {
+                if(chat.weather.isOpen){
+                    $('.weather').animate({left:-400});
+                    $('.weather-btn').animate({left:0});
+                    chat.weather.isOpen=!chat.weather.isOpen
+                }else{
+                    this.getWeather();
+                    $('.weather').animate({left:0});
+                    $('.weather-btn').animate({left:"18%"});
+                    chat.weather.isOpen=!chat.weather.isOpen
+                }
+            }
+
+        },
+        filters:{
+            suggestionFilter:function (value) {
+                var title=suggestionTitle.filter((type)=>{return type.code==value}).shift();
+                return title.txt
+            }
+        }
+    });
+
+    socket.on('connect', function(){
+        chat.me.userId = socket.id;
+
+    });
+    socket.on('reconnect', function(){
+        socket.emit('user online', chat.me);
+    });
+
+    socket.on('chat message', function (msg) {
+        chat.messages.push(msg);
+        if(document.hidden) {
+            notify(msg);
+        }
+        chat.$nextTick(function () {
+            $('.messages').scrollTop($('.messages ul').height());
+        });
+    });
+    socket.on('user online', generateUserList);
+    socket.on('user offline', function(userId){
+        for(var i = chat.users.length;i--;){
+            if(userId == chat.users[i].userId){
+                chat.users.splice(i,1);
+                break;
+            }
+        }
+    });
+
+    function generateUserList(users){
+        chat.users = [];
+        Object.keys(users).forEach(function(key){
+            chat.users.push(users[key]);
+        });
+        $('.loading').hide();
+    }
+
+
+    function userListHeartBeat(){
+        socket.emit('list', '', generateUserList);
+    }
+
+    var heartBeat = setInterval(userListHeartBeat, 1000 * 60);
+
+
+    $('#m').keydown(function(e){
+        var keyCode = e.keyCode || e.which || e.charCode;
+        var ctrlKey = e.ctrlKey || e.metaKey;
+        if(ctrlKey && keyCode == 13) {
+            $('#m').append('<div><br></div>');
+            var sel = window.getSelection();
+            var rang = sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+            var tempRange = document.createRange();
+            tempRange.selectNodeContents($('#m').get(0));
+            tempRange.setStart(rang.endContainer, tempRange.endOffset);
+            tempRange.setEnd(rang.endContainer, tempRange.endOffset);
+            sel.removeAllRanges();
+            sel.addRange(tempRange);
+            return false;
+        }else{
+            if(keyCode ==13){
+                chat.sendMessage();
+                return false;
+            }
+        }
+    });
+
+    document.body.onpaste = function (e) {
+        var items = e.clipboardData.items;
+        if (items[0].kind == 'file' &&
+                items[0].type.indexOf('image/') !== -1) {
+            var blob = items[0].getAsFile();
+            var imgFile = new FileReader();
+            imgFile.readAsDataURL(blob);
+            imgFile.onload = function () {
+                var img = document.createElement('img');
+                img.src = this.result;
+                $('#m').append(img);
+            };
+        }
+    };
+
+    function notify(msg) {
+
+        var title = msg.userName + ':';
+        var content = msg.message.replace(/<\s?img[^>]*>/gi, ' [图片] ');
+        var iconUrl = 'images/' + msg.headPic;
+
+        if (window.webkitNotifications) {
+            //chrome老版本
+            if (window.webkitNotifications.checkPermission() == 0) {
+                var notif = window.webkitNotifications.createNotification(iconUrl, title, content);
+                notif.display = function() {}
+                notif.onerror = function() {}
+                notif.onclose = function() {}
+                notif.onclick = function() {this.cancel();}
+                notif.replaceId = 'Meteoric';
+                notif.show();
+            } else {
+                window.webkitNotifications.requestPermission($jy.notify);
+            }
+        }
+        else if("Notification" in window){
+
+            if (Notification.permission === "granted") {
+                var notification = new Notification(title, {
+                    "icon": iconUrl,
+                    "body": content
+                });
+            }
+
+            else if (Notification.permission !== 'denied') {
+                Notification.requestPermission(function(permission) {
+                    // Whatever the user answers, we make sure we store the
+                    // information
+                    if (!('permission' in Notification)) {
+                        Notification.permission = permission;
+                    }
+
+                    if (permission === "granted") {
+                        var notification = new Notification(title, {
+                            "icon": iconUrl,
+                            "body": content
+                        });
+                    }
+                });
+            }
+        }
+    }
+
+    $('#user').on('click', function(){
+      $('.user-list').toggle();
+    })
+</script>
+</html>
